@@ -5,6 +5,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
 import net.minecraft.client.gui.hud.SpectatorHud;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.input.Scroller;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.player.PlayerInventory;
@@ -28,6 +29,24 @@ public class MouseMixin {
 
     @Shadow private int activeButton;
 
+    @Unique
+    private static boolean block(int button) {
+        return switch (button) {
+            case 0 -> !SCREEN_PRIMARY.matchesMouse(0) && !SCREEN_SECONDARY.matchesMouse(0);
+            case 1 -> !SCREEN_PRIMARY.matchesMouse(1) && !SCREEN_SECONDARY.matchesMouse(1);
+            default -> false;
+        };
+    }
+
+    @Unique
+    private static int remap(int button) {
+        if (SCREEN_PRIMARY.matchesMouse(button))
+            return 0;
+        if (SCREEN_SECONDARY.matchesMouse(button))
+            return 1;
+        return button;
+    }
+
     @Inject(method = "onMouseButton", at = @At("HEAD"))
     public void setIsMouseKeyDown(long window, int button, int action, int mods, CallbackInfo ci) {
         if (action == GLFW.GLFW_PRESS)
@@ -36,11 +55,38 @@ public class MouseMixin {
             RebindAllTheKeys.IS_MOUSE_DOWN.put(button, false);
     }
 
-    @Redirect(method = "onMouseScroll", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/PlayerInventory;scrollInHotbar(D)V"))
-    public void blockHotbarScroll(PlayerInventory playerInventory, double scrollAmount) {
-        if (scrollAmount < 0 && HOTBAR_NEXT_OVERRIDE.isUnbound()
-           || scrollAmount > 0 && HOTBAR_PREVIOUS_OVERRIDE.isUnbound())
-            playerInventory.scrollInHotbar(scrollAmount);
+    @Redirect(method = "onMouseButton", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screen/Screen;mouseClicked(DDI)Z"))
+    public boolean onMouseClicked(Screen screen, double mouseX, double mouseY, int button) {
+        return !block(button) && screen.mouseClicked(mouseX, mouseY, remap(button));
+    }
+
+    @Redirect(method = "onMouseButton", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screen/Screen;mouseReleased(DDI)Z"))
+    public boolean onMouseReleased(Screen screen, double mouseX, double mouseY, int button) {
+        return !block(button) && screen.mouseReleased(mouseX, mouseY, remap(button));
+    }
+
+    @Redirect(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screen/Screen;mouseDragged(DDIDD)Z"))
+    public boolean onMouseDragged(Screen screen, double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (block(button))
+            return false;
+
+        if (button == -10)
+            button = 0;
+        else if (button == -9)
+            button = 1;
+        else
+            button = remap(button);
+
+        return screen.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    }
+
+    @Redirect(method = "onMouseScroll", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/input/Scroller;scrollCycling(DII)I"))
+    public int blockHotbarScroll(double amount, int selectedIndex, int total) {
+        if (amount < 0 && HOTBAR_NEXT_OVERRIDE.isUnbound()
+           || amount > 0 && HOTBAR_PREVIOUS_OVERRIDE.isUnbound())
+            return Scroller.scrollCycling(amount, selectedIndex, total);
+        else
+            return selectedIndex;
     }
 
     @Redirect(method = "onMouseScroll", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/hud/SpectatorHud;cycleSlot(I)V"))
@@ -55,58 +101,5 @@ public class MouseMixin {
         InputUtil.Key key = Math.abs(vertical) > Math.abs(horizontal) ? vertical > 0 ? SCROLL_UP : SCROLL_DOWN : horizontal > 0 ? SCROLL_LEFT : SCROLL_RIGHT;
         KeyBinding.setKeyPressed(key, true);
         KeyBinding.onKeyPressed(key);
-    }
-
-    @Unique
-    private static boolean block(int button) {
-        return switch (button) {
-            case 0 -> !SCREEN_PRIMARY.matchesMouse(0) && !SCREEN_SECONDARY.matchesMouse(0);
-            case 1 -> !SCREEN_PRIMARY.matchesMouse(1) && !SCREEN_SECONDARY.matchesMouse(1);
-            default -> false;
-        };
-    }
-
-    @Inject(method = "method_1611", at = @At("HEAD"), cancellable = true)
-    private static void blockPressScreenClick(boolean[] bls, Screen screen, double d, double e, int i, CallbackInfo ci) {
-        if (block(i))
-            ci.cancel();
-    }
-
-    @Inject(method = "method_1605", at = @At("HEAD"), cancellable = true)
-    private static void blockReleaseScreenClick(boolean[] bls, Screen screen, double d, double e, int i, CallbackInfo ci) {
-        if (block(i))
-            ci.cancel();
-    }
-
-    @Inject(method = "method_55795", at = @At("HEAD"), cancellable = true)
-    private void blockDragScreenClick(Screen screen, double d, double e, double f, double g, CallbackInfo ci) {
-        if (block(activeButton))
-            ci.cancel();
-    }
-
-    @Unique
-    private static int remap(int button) {
-        if (SCREEN_PRIMARY.matchesMouse(button))
-            return 0;
-        if (SCREEN_SECONDARY.matchesMouse(button))
-            return 1;
-        return button;
-    }
-
-    @ModifyArg(method = "method_1611", index = 2, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screen/Screen;mouseClicked(DDI)Z"))
-    private static int remapPressMouseButton(int button) {
-        return remap(button);
-    }
-
-    @ModifyArg(method = "method_1605", index = 2, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screen/Screen;mouseReleased(DDI)Z"))
-    private static int remapReleaseMouseButton(int button) {
-        return remap(button);
-    }
-
-    @ModifyArg(method = "method_55795", index = 2, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screen/Screen;mouseDragged(DDIDD)Z"))
-    private int remapDragMouseButton(int button) {
-        if (button == -10) return 0;
-        if (button == - 9) return 1;
-        return remap(button);
     }
 }

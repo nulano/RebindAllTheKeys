@@ -10,8 +10,12 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.resource.language.I18n;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.crash.CrashException;
+import net.minecraft.util.crash.CrashReport;
+import net.minecraft.util.crash.CrashReportSection;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -29,7 +33,7 @@ public abstract class KeyboardMixin {
 
 	@Shadow @Final private MinecraftClient client;
 
-	@Shadow protected abstract void debugLog(String string, Object... objects);
+	@Shadow protected abstract void debugLog(Text text);
 
 	@ModifyArg(method = "onKey", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Keyboard;processF3(I)Z"))
 	public int remapDebugKeys(int key) {
@@ -77,11 +81,9 @@ public abstract class KeyboardMixin {
 		return Screen.hasControlDown() || !RebindAllTheKeys.TOGGLE_NARRATOR_OVERRIDE.isUnbound();
 	}
 
-	@Redirect(method = "pollDebugCrash", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Keyboard;debugLog(Ljava/lang/String;[Ljava/lang/Object;)V"))
-	public void showActualIntentionalCrashKeybind(Keyboard keyboard, String key, Object[] objects) {
-		this.client.inGameHud.getChatHud().addMessage((Text.literal(""))
-				.append((Text.translatable("debug.prefix")).formatted(Formatting.YELLOW, Formatting.BOLD))
-				.append(" ").append(I18n.translate(key).replace("F3 + C", RebindAllTheKeys.getDebugKeybindString(INTENTIONAL_CRASH))));
+	@Redirect(method = "pollDebugCrash", at = @At(value = "INVOKE", target = "Lnet/minecraft/text/Text;translatable(Ljava/lang/String;[Ljava/lang/Object;)Lnet/minecraft/text/MutableText;"))
+	public MutableText showActualIntentionalCrashKeybind(String key, Object[] objects) {
+		return Text.literal(I18n.translate(key).replace("F3 + C", RebindAllTheKeys.getDebugKeybindString(INTENTIONAL_CRASH)));
 	}
 
 
@@ -89,7 +91,7 @@ public abstract class KeyboardMixin {
 	public void showDebugKeybinds(int key, CallbackInfoReturnable<Boolean> info) {
 		if (key != 81)
 			return;
-		this.debugLog("debug.help.message");
+		this.debugLog(Text.stringifiedTranslatable("debug.help.message"));
 
 		ChatHud chatHud = this.client.inGameHud.getChatHud();
 		chatHud.addMessage(changeBinding("debug.reload_chunks.help", "A", RELOAD_CHUNKS));
@@ -137,13 +139,24 @@ public abstract class KeyboardMixin {
 		double d = client.mouse.getX() * (double) client.getWindow().getScaledWidth() / (double) client.getWindow().getWidth();
 		double e = client.mouse.getY() * (double) client.getWindow().getScaledHeight() / (double) client.getWindow().getHeight();
 
+		Runnable action_ = null;
 		if (action == GLFW.GLFW_PRESS) {
 			client.mouse.activeButton = button - 10;
 			screen.applyMousePressScrollNarratorDelay();
-			Screen.wrapScreenError(() -> screen.mouseClicked(d, e, button), "screen primary press event handler (rebinded click handler)", screen.getClass().getCanonicalName());
+			action_ = () -> screen.mouseClicked(d, e, button);
 		} else if (action == GLFW.GLFW_RELEASE) {
 			client.mouse.activeButton = -1;
-			Screen.wrapScreenError(() -> screen.mouseReleased(d, e, button), "screen primary press event handler (rebinded click handler)", screen.getClass().getCanonicalName());
+			action_ = () -> screen.mouseReleased(d, e, button);
+		}
+		if (action_ != null) {
+			try {
+				action_.run();
+			} catch (Throwable ex) {
+				CrashReport crashReport = CrashReport.create(ex, "screen primary press event handler (rebinded click handler)");
+				CrashReportSection crashReportSection = crashReport.addElement("Affected screen");
+				crashReportSection.add("Screen name", () -> screen.getClass().getCanonicalName());
+				throw new CrashException(crashReport);
+			}
 		}
 	}
 

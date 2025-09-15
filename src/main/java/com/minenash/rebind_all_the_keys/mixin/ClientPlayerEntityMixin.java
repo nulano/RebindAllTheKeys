@@ -7,6 +7,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.util.PlayerInput;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -32,7 +33,7 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
             this.setSprinting(true);
     }
 
-    @ModifyExpressionValue(method = "tickMovement", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;canSprint()Z"))
+    @ModifyExpressionValue(method = "canStartSprinting", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;canSprint()Z"))
     private boolean cancelSprintIfNotPersistent(boolean original) {
         return (RebindAllTheKeys.dontDisableSprint || RebindAllTheKeys.expandedSprint.getValue() == RebindAllTheKeys.SprintMode.PERSISTENT || client.options.sprintKey.isPressed()) && original;
     }
@@ -42,34 +43,43 @@ public abstract class ClientPlayerEntityMixin extends AbstractClientPlayerEntity
         RebindAllTheKeys.dontDisableSprint = true;
     }
 
-    @ModifyExpressionValue(method = "tickMovement", at = @At(value = "FIELD", ordinal = 2, target = "Lnet/minecraft/client/input/Input;jumping:Z"))
-    public boolean disableDoubleTapFlyAndProcessJumpButton(boolean original) {
+    // TODO probably ordinal 1 + 2 on playerInput.jump()
+//    @ModifyExpressionValue(method = "tickMovement", at = @At(value = "FIELD", ordinal = 2, target = "Lnet/minecraft/client/input/Input;jumping:Z"))
+//    public boolean disableDoubleTapFlyAndProcessJumpButton(boolean original) {
+//
+//        boolean flying = getAbilities().flying;
+//        while (RebindAllTheKeys.FLY.wasPressed()) {
+//            getAbilities().flying = !getAbilities().flying;
+//        }
+//        boolean newFlying = getAbilities().flying;
+//        if (newFlying != flying) {
+//            bl8 = true;
+//            this.sendAbilitiesUpdate();
+//            if (newFlying)
+//                setPosition(getX(), getY() + 0.25, getZ());
+//        }
+//
+//        return RebindAllTheKeys.doubleTapFly.getValue() && original;
+//    }
+//
+//    @Unique
+//    private static boolean bl8 = false;
+//
+//    @ModifyExpressionValue(method = "tickMovement", at = @At(value = "FIELD", ordinal = 3, target = "Lnet/minecraft/client/input/Input;jumping:Z"))
+//    public boolean correctBl8(boolean original) {
+//        return original && !bl8;
+//    }
 
-        boolean flying = getAbilities().flying;
-        while (RebindAllTheKeys.FLY.wasPressed()) {
-            getAbilities().flying = !getAbilities().flying;
-        }
-        boolean newFlying = getAbilities().flying;
-        if (newFlying != flying) {
-            bl8 = true;
-            this.sendAbilitiesUpdate();
-            if (newFlying)
-                setPosition(getX(), getY() + 0.25, getZ());
-        }
-
-        return RebindAllTheKeys.doubleTapFly.getValue() && original;
-    }
-
-    @Unique
-    private static boolean bl8 = false;
-
-    @ModifyExpressionValue(method = "tickMovement", at = @At(value = "FIELD", ordinal = 3, target = "Lnet/minecraft/client/input/Input;jumping:Z"))
-    public boolean correctBl8(boolean original) {
-        return original && !bl8;
-    }
-
-    @ModifyArg(method = "tick", index = 3, at = @At(value = "INVOKE", target = "Lnet/minecraft/network/packet/c2s/play/PlayerInputC2SPacket;<init>(FFZZ)V"))
-    public boolean changeDismountKey(boolean _sneaking) {
-        return RebindAllTheKeys.isKeybindPressed(RebindAllTheKeys.DISMOUNT);
+    @ModifyArg(method = "tick", index = 0, at = @At(value = "INVOKE", target = "Lnet/minecraft/network/packet/c2s/play/PlayerInputC2SPacket;<init>(Lnet/minecraft/util/PlayerInput;)V"))
+    public PlayerInput changeDismountKey(PlayerInput playerInput) {
+        return new PlayerInput(
+                playerInput.forward(),
+                playerInput.backward(),
+                playerInput.left(),
+                playerInput.right(),
+                playerInput.jump(),
+                RebindAllTheKeys.isKeybindPressed(RebindAllTheKeys.DISMOUNT),
+                playerInput.sprint()
+        );
     }
 }

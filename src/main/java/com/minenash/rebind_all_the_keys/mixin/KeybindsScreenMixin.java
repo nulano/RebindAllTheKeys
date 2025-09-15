@@ -34,11 +34,11 @@ public abstract class KeybindsScreenMixin extends GameOptionsScreen {
     }
 
     @Redirect(method = "keyPressed", at = @At(value = "INVOKE", ordinal = 0,
-            target = "Lnet/minecraft/client/option/GameOptions;setKeyCode(Lnet/minecraft/client/option/KeyBinding;Lnet/minecraft/client/util/InputUtil$Key;)V"))
-    public void ScreenPrimaryCanNotBeUnbound(GameOptions options, KeyBinding binding, InputUtil.Key key, int keyCode, int scanCode) {
+            target = "Lnet/minecraft/client/option/KeyBinding;setBoundKey(Lnet/minecraft/client/util/InputUtil$Key;)V"))
+    public void ScreenPrimaryCanNotBeUnbound(KeyBinding binding, InputUtil.Key key) {
         if (binding == SCREEN_PRIMARY) key = InputUtil.Type.MOUSE.createFromCode(0);
         if (binding == SCREEN_SECONDARY) key = InputUtil.Type.MOUSE.createFromCode(1);
-        options.setKeyCode(binding, key);
+        binding.setBoundKey(key);
     }
 
     @Override
@@ -46,7 +46,8 @@ public abstract class KeybindsScreenMixin extends GameOptionsScreen {
 //        System.out.println("H: " + horizontalAmount + " V: " + verticalAmount);
         if (selectedKeyBinding != null) {
             InputUtil.Key key = Math.abs(verticalAmount) > Math.abs(horizontalAmount) ? verticalAmount > 0 ? SCROLL_UP : SCROLL_DOWN : horizontalAmount > 0 ? SCROLL_LEFT : SCROLL_RIGHT;
-            gameOptions.setKeyCode(selectedKeyBinding, key);
+            selectedKeyBinding.setBoundKey(key);
+            gameOptions.write();
             this.selectedKeyBinding = null;
             controlsList.update();
             return true;

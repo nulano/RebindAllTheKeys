@@ -9,9 +9,11 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.input.Scroller;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.option.SimpleOption;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.StringIdentifiable;
@@ -143,13 +145,19 @@ public class RebindAllTheKeys implements ClientModInitializer {
 				client.player.sendMessage(Text.translatable("rebind_all_the_keys.keybind.toggle_auto_jump.msg." + value), true);
 			}
 
-			while (HOTBAR_NEXT_OVERRIDE.wasPressed())
-				if (client.player != null && client.currentScreen == null)
-					client.player.getInventory().scrollInHotbar(-1);
+			if (client.player != null && client.currentScreen == null) {
+				PlayerInventory inventory = client.player.getInventory();
+				int selectedSlot = inventory.getSelectedSlot();
+				int hotbarSize = PlayerInventory.getHotbarSize();
 
-			while (HOTBAR_PREVIOUS_OVERRIDE.wasPressed())
-				if (client.player != null && client.currentScreen == null)
-					client.player.getInventory().scrollInHotbar(1);
+				while (HOTBAR_NEXT_OVERRIDE.wasPressed())
+					selectedSlot = Scroller.scrollCycling(-1, selectedSlot, hotbarSize);
+
+				while (HOTBAR_PREVIOUS_OVERRIDE.wasPressed())
+					selectedSlot = Scroller.scrollCycling(1, selectedSlot, hotbarSize);
+
+				inventory.setSelectedSlot(selectedSlot);
+			}
 
 			if (isKeybindPressed(DEBUG_KEY) && isKeybindPressed(CYCLE_RENDER_DISTANCE)) {
 				SimpleOption<Integer> option = ((GameOptionsAccessor) client.options).getViewDistance();
@@ -158,7 +166,7 @@ public class RebindAllTheKeys implements ClientModInitializer {
 				if (newValue < 2) newValue = 2;
 				if (newValue > max) newValue = max;
 
-				client.player.sendMessage(Text.literal("§e§l[Debug]:§f Set Render Distance to " + newValue));
+				client.player.sendMessage(Text.literal("§e§l[Debug]:§f Set Render Distance to " + newValue), false);
 				option.setValue(newValue);
 			}
 

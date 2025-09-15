@@ -3,14 +3,14 @@ package com.minenash.rebind_all_the_keys.mixin;
 import com.minenash.rebind_all_the_keys.RebindAllTheKeys;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.minecraft.client.gui.screen.GameModeSelectionScreen;
+import net.minecraft.client.gui.screen.GameModeSwitcherScreen;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.*;
 
 @Environment(EnvType.CLIENT)
-@Mixin(GameModeSelectionScreen.class)
+@Mixin(GameModeSwitcherScreen.class)
 public class GameModeSelectionScreenMixin {
 
 
